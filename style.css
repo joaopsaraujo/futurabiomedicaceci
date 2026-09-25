@@ -185,3 +185,18 @@ textarea {
   .toolbar label { width: 100%; }
   .toolbar select { flex: 1; }
 }
+
+/* Disciplinas */
+.disc { margin-top: 12px; }
+.disc-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 28px 0 14px; }
+.disc-head .section-title { margin: 0 0 2px; }
+.disc-head .small { margin: 0; }
+.disc-head .btn { text-decoration: none; }
+.tabs.sub { margin-top: -10px; }
+.tabs.sub .tab { font-size: 14px; padding: 6px 14px; }
+.tabs.sub .tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+details.fontes { margin-bottom: 12px; }
+details.fontes summary { cursor: pointer; }
+optgroup { font-weight: 600; }
+.toolbar select { max-width: 100%; }
+#fAula, #sAula { max-width: 420px; }

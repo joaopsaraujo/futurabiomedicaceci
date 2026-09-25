@@ -3,11 +3,26 @@
 
   const D = window.DADOS;
   const app = document.getElementById("app");
-  const AULAS = {
-    "6": { nome: "Aula 6", tema: "Carboidratos e diabetes mellitus" },
-    "8": { nome: "Aula 8", tema: "Síndrome plurimetabólica, lipídios e fígado" },
-    "9": { nome: "Aula 9", tema: "Eletrólitos e metabolismo do ferro" },
-  };
+  const DISC = D.disciplinas;
+  const AULAS = {};
+  DISC.forEach((d) => d.aulas.forEach((a) => { AULAS[a.id] = Object.assign({ disc: d.id, discNome: d.nome }, a); }));
+  const discOf = (id) => DISC.find((d) => d.id === id);
+  // filtro: "todas" | "d:<disciplina>" | "<aulaId>"
+  function matchFiltro(q, f) {
+    if (!f || f === "todas") return true;
+    if (f.startsWith("d:")) return q.disc === f.slice(2);
+    return q.aula === f;
+  }
+  function filtroLabel(f) {
+    if (f === "todas") return "Todas as disciplinas";
+    if (f.startsWith("d:")) return discOf(f.slice(2)).nome;
+    return AULAS[f] ? AULAS[f].discNome + " · " + AULAS[f].nome : f;
+  }
+  function filtroOptions(cur) {
+    const o = (v, l) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`;
+    return o("todas", "Todas as disciplinas") + DISC.map((d) =>
+      `<optgroup label="${d.nome}">${o("d:" + d.id, "Tudo de " + d.nome)}${d.aulas.map((a) => o(a.id, a.nome + " — " + a.tema)).join("")}</optgroup>`).join("");
+  }
   const ALL_Q = D.questoes;
   const OBJ_Q = ALL_Q.filter((q) => !q.discursiva);
 
@@ -42,8 +57,8 @@
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   }
-  function stats(aula) {
-    const qs = OBJ_Q.filter((q) => aula === "todas" || q.aula === aula);
+  function stats(f) {
+    const qs = OBJ_Q.filter((q) => matchFiltro(q, f));
     let feitas = 0, certas = 0;
     qs.forEach((q) => { const r = store.respostas[q.id]; if (r) { feitas++; if (r.ok) certas++; } });
     return { total: qs.length, feitas, certas };
@@ -59,51 +74,58 @@
   /* ---------- HOME ---------- */
   function home() {
     setNav("");
-    const cards = Object.keys(AULAS).map((k) => {
-      const s = stats(k);
-      const pct = s.total ? Math.round((s.feitas / s.total) * 100) : 0;
-      return `<a class="card" href="#/resumo/${k}">
-        <span class="tag">${AULAS[k].nome}</span>
-        <h3>${AULAS[k].tema}</h3>
-        <p>${s.feitas}/${s.total} questões feitas · ${s.feitas ? Math.round((s.certas / s.feitas) * 100) + "% de acerto" : "comece pelo resumo"}</p>
-        <div class="meter"><i style="width:${pct}%"></i></div>
-      </a>`;
+    const blocos = DISC.map((d) => {
+      const cards = d.aulas.map((a) => {
+        const s = stats(a.id);
+        const pct = s.total ? Math.round((s.feitas / s.total) * 100) : 0;
+        return `<a class="card" href="#/resumo/${a.id}">
+          <span class="tag">${a.nome}</span>
+          <h3>${esc(a.tema)}</h3>
+          <p>${s.feitas}/${s.total} questões feitas · ${s.feitas ? Math.round((s.certas / s.feitas) * 100) + "% de acerto" : "comece pelo resumo"}</p>
+          <div class="meter"><i style="width:${pct}%"></i></div>
+        </a>`;
+      }).join("");
+      const g = stats("d:" + d.id);
+      const nq = ALL_Q.filter((q) => q.disc === d.id).length;
+      return `<section class="disc">
+        <div class="disc-head">
+          <div><h2 class="section-title">${d.nome}</h2><p class="small">${d.prof} · ${d.aulas.length} aulas · ${nq} questões · ${g.feitas}/${g.total} feitas</p></div>
+          <div class="navrow"><a class="btn" href="#/questoes?aula=d:${d.id}">Questões</a><a class="btn" href="#/simulado?aula=d:${d.id}">Simulado</a></div>
+        </div>
+        <div class="grid">${cards}</div>
+      </section>`;
     }).join("");
-    const g = stats("todas");
     app.innerHTML = `
       <section class="hero">
-        <span class="tag">Bioquímica Clínica</span>
-        <h1>Resumo + ${ALL_Q.length} questões comentadas</h1>
+        <span class="tag">Biomedicina · Estudos</span>
+        <h1>${DISC.length} disciplinas, ${ALL_Q.length} questões comentadas</h1>
         <p>Leia o resumo de cada aula, treine com as questões (a resposta aparece na hora, com explicação) e depois faça um simulado para se testar. Seu progresso fica salvo neste navegador.</p>
       </section>
-      <div class="grid">${cards}</div>
-      <h2 class="section-title">Treinar</h2>
-      <div class="grid">
-        <a class="card" href="#/questoes"><h3>Questões comentadas</h3><p>Uma por vez, com feedback imediato. Filtre por aula, embaralhe ou refaça só as que errou.</p>
-          <div class="meter"><i style="width:${g.total ? (g.feitas / g.total) * 100 : 0}%"></i></div>
-          <p class="small" style="margin-top:8px">${g.feitas}/${g.total} feitas · ${g.certas} certas</p></a>
-        <a class="card" href="#/simulado"><h3>Simulado</h3><p>Questões sorteadas, sem gabarito até o fim. Bom para testar com seu amigo quem acerta mais.</p></a>
-      </div>
+      ${blocos}
       <h2 class="section-title">Fontes</h2>
-      <div class="card prose">${D.fontes}</div>`;
+      ${DISC.map((d) => `<details class="card prose fontes"><summary><b>${d.nome}</b></summary>${d.fontes}</details>`).join("")}`;
   }
 
   /* ---------- RESUMO ---------- */
   function resumo(aula) {
     setNav("resumo");
-    if (!AULAS[aula]) aula = "6";
-    const tabs = Object.keys(AULAS).map((k) =>
-      `<a class="tab ${k === aula ? "active" : ""}" href="#/resumo/${k}">${AULAS[k].nome}</a>`).join("");
-    const partes = D.resumo[aula];
+    if (!AULAS[aula]) aula = store.ultimaAula && AULAS[store.ultimaAula] ? store.ultimaAula : DISC[0].aulas[0].id;
+    store.ultimaAula = aula; save();
+    const A = AULAS[aula], d = discOf(A.disc);
+    const discTabs = DISC.map((x) =>
+      `<a class="tab ${x.id === d.id ? "active" : ""}" href="#/resumo/${x.id === d.id ? aula : x.aulas[0].id}">${x.nome}</a>`).join("");
+    const tabs = d.aulas.map((a) =>
+      `<a class="tab ${a.id === aula ? "active" : ""}" href="#/resumo/${a.id}">${a.nome}</a>`).join("");
     let html = "";
-    partes.forEach((p, i) => { html += `<h2 id="s${i}">${esc(p.titulo)}</h2>` + p.html; });
-    const note = aula === "9" ? `<div class="note">Os slides desta aula vieram só com imagens. O resumo segue o conteúdo padrão da disciplina; confira os valores de referência com os da professora.</div>` : "";
+    A.secoes.forEach((p, i) => { html += `<h2 id="s${i}">${esc(p.titulo)}</h2>` + p.html; });
+    const note = A.nota ? `<div class="note">${A.nota}</div>` : "";
     app.innerHTML = `
-      <div class="tabs">${tabs}</div>
+      <div class="tabs">${discTabs}</div>
+      <div class="tabs sub">${tabs}</div>
       <div class="resumo-layout">
         <nav class="toc" id="toc"></nav>
         <article class="prose" id="prose">${note}${html}
-          <p style="margin-top:40px"><a class="btn primary" href="#/questoes?aula=${aula}" style="text-decoration:none">Fazer as questões da ${AULAS[aula].nome} →</a></p>
+          <p style="margin-top:40px"><a class="btn primary" href="#/questoes?aula=${aula}" style="text-decoration:none">Fazer as questões da ${A.nome} →</a></p>
         </article>
       </div>`;
     const prose = document.getElementById("prose");
@@ -142,7 +164,7 @@
 
   function montarLista() {
     const f = store.filtro;
-    let qs = ALL_Q.filter((q) => f.aula === "todas" || q.aula === f.aula);
+    let qs = ALL_Q.filter((q) => matchFiltro(q, f.aula));
     if (f.modo === "erradas") qs = qs.filter((q) => store.respostas[q.id] && !store.respostas[q.id].ok);
     if (f.modo === "naofeitas") qs = qs.filter((q) => !q.discursiva && !store.respostas[q.id]);
     if (f.ordem === "rand") qs = shuffle(qs);
@@ -151,7 +173,7 @@
 
   function questoes(params) {
     setNav("questoes");
-    if (params.aula && (AULAS[params.aula] || params.aula === "todas")) {
+    if (params.aula && (AULAS[params.aula] || params.aula === "todas" || (params.aula.startsWith("d:") && discOf(params.aula.slice(2))))) {
       if (store.filtro.aula !== params.aula) { store.filtro.aula = params.aula; sessao = null; save(); }
     }
     if (!sessao) montarLista();
@@ -163,9 +185,7 @@
     const opt = (v, cur, label) => `<option value="${v}" ${v === cur ? "selected" : ""}>${label}</option>`;
     const toolbar = `
       <div class="toolbar">
-        <label>Aula <select id="fAula">
-          ${opt("todas", f.aula, "Todas")}${Object.keys(AULAS).map((k) => opt(k, f.aula, AULAS[k].nome)).join("")}
-        </select></label>
+        <label>Conteúdo <select id="fAula">${filtroOptions(f.aula)}</select></label>
         <label>Mostrar <select id="fModo">
           ${opt("todas", f.modo, "Todas")}${opt("naofeitas", f.modo, "Não respondidas")}${opt("erradas", f.modo, "Só as que errei")}
         </select></label>
@@ -202,14 +222,14 @@
       const rr = store.respostas[id];
       const qq = ALL_Q.find((x) => x.id === id);
       let c = rr ? (rr.ok ? "ok" : "bad") : (qq.discursiva && store.discursivas[id] ? "done" : "");
-      return `<button class="dot ${c} ${i === sessao.idx ? "cur" : ""}" data-i="${i}" title="Aula ${qq.aula} · Questão ${qq.n}">${qq.n}</button>`;
+      return `<button class="dot ${c} ${i === sessao.idx ? "cur" : ""}" data-i="${i}" title="${AULAS[qq.aula].discNome} · ${AULAS[qq.aula].nome} · Questão ${qq.n}">${qq.n}</button>`;
     }).join("");
 
     app.innerHTML = toolbar + `
       <div class="progress"><span>${pos} de ${tot}</span><div class="meter"><i style="width:${(pos / tot) * 100}%"></i></div>
         <span>${s.certas}/${s.feitas} certas</span></div>
       <div class="card qcard">
-        <div class="qmeta"><span class="tag">${AULAS[q.aula].nome}${q.topico ? " · " + esc(q.topico) : ""}</span>
+        <div class="qmeta"><span class="tag">${AULAS[q.aula].discNome} · ${AULAS[q.aula].nome}${q.topico ? " · " + esc(q.topico) : ""}</span>
           <span class="small">Questão ${q.n}${q.discursiva ? " · discursiva" : ""}</span></div>
         <div class="qtext">${q.enunciado.map(stmtLine).join("")}</div>
         ${corpo}
@@ -260,20 +280,20 @@
   /* ---------- SIMULADO ---------- */
   let sim = null; // { ids, picks:{}, fim:false, inicio }
 
-  function simulado() {
+  function simulado(params) {
     setNav("simulado");
-    if (!sim) return simuladoConfig();
+    if (!sim) return simuladoConfig((params && params.aula) || "todas");
     if (sim.fim) return simuladoResultado();
     simuladoProva();
   }
 
-  function simuladoConfig() {
+  function simuladoConfig(pre) {
     app.innerHTML = `
       <div class="card" style="max-width:560px">
         <h3>Montar simulado</h3>
         <p class="small">Questões objetivas sorteadas. O gabarito só aparece quando você finalizar. Não altera seu progresso das questões comentadas.</p>
         <div class="toolbar" style="margin-top:16px">
-          <label>Aula <select id="sAula"><option value="todas">Todas</option>${Object.keys(AULAS).map((k) => `<option value="${k}">${AULAS[k].nome}</option>`).join("")}</select></label>
+          <label>Conteúdo <select id="sAula">${filtroOptions(pre)}</select></label>
           <label>Quantidade <select id="sQtd"><option>10</option><option selected>20</option><option>30</option><option value="999">Todas</option></select></label>
         </div>
         <button class="btn primary" id="start">Começar</button>
@@ -281,7 +301,7 @@
     document.getElementById("start").onclick = () => {
       const aula = document.getElementById("sAula").value;
       const qtd = +document.getElementById("sQtd").value;
-      const pool = OBJ_Q.filter((q) => aula === "todas" || q.aula === aula);
+      const pool = OBJ_Q.filter((q) => matchFiltro(q, aula));
       sim = { ids: shuffle(pool).slice(0, qtd).map((q) => q.id), picks: {}, fim: false, inicio: Date.now() };
       simulado();
     };
@@ -291,7 +311,7 @@
     const blocos = sim.ids.map((id, i) => {
       const q = ALL_Q.find((x) => x.id === id);
       return `<div class="card qcard" style="margin-bottom:16px">
-        <div class="qmeta"><span class="tag">${i + 1}/${sim.ids.length}</span><span class="small">${AULAS[q.aula].nome}</span></div>
+        <div class="qmeta"><span class="tag">${i + 1}/${sim.ids.length}</span><span class="small">${AULAS[q.aula].discNome} · ${AULAS[q.aula].nome}</span></div>
         <div class="qtext">${q.enunciado.map(stmtLine).join("")}</div>
         <div class="opts">${q.opcoes.map((o) => `<button class="opt ${sim.picks[id] === o.id ? "picked" : ""}" data-q="${id}" data-id="${o.id}"><span class="letter">${o.id}</span><span>${o.texto}</span></button>`).join("")}</div>
       </div>`;
@@ -327,7 +347,7 @@
       porAula[q.aula] = porAula[q.aula] || { c: 0, t: 0 };
       porAula[q.aula].t++; if (ok) porAula[q.aula].c++;
       return `<div class="card review-item">
-        <div class="qmeta"><span class="tag">${i + 1}</span><span class="small">${AULAS[q.aula].nome} · ${ok ? "✔ certa" : pick ? "✘ errada" : "em branco"}</span></div>
+        <div class="qmeta"><span class="tag">${i + 1}</span><span class="small">${AULAS[q.aula].discNome} · ${AULAS[q.aula].nome} · ${ok ? "✔ certa" : pick ? "✘ errada" : "em branco"}</span></div>
         <div class="qtext">${q.enunciado.map(stmtLine).join("")}</div>
         <div class="opts">${q.opcoes.map((o) => {
           const cls = o.id === q.correta ? "correct" : o.id === pick ? "wrong" : "";
@@ -338,7 +358,7 @@
     }).join("");
     const pct = Math.round((certas / sim.ids.length) * 100);
     const min = Math.max(1, Math.round((sim.fimEm - sim.inicio) / 60000));
-    const detalhe = Object.keys(porAula).sort().map((k) => `${AULAS[k].nome}: ${porAula[k].c}/${porAula[k].t}`).join(" · ");
+    const detalhe = Object.keys(porAula).map((k) => `${AULAS[k].nome}: ${porAula[k].c}/${porAula[k].t}`).join(" · ");
     app.innerHTML = `
       <div class="card result">
         <span class="tag">Resultado</span>
@@ -360,9 +380,9 @@
     const [path, query] = h.split("?");
     const params = Object.fromEntries(new URLSearchParams(query || ""));
     const parts = path.split("/").filter(Boolean);
-    if (parts[0] === "resumo") resumo(parts[1] || "6");
+    if (parts[0] === "resumo") resumo(parts[1]);
     else if (parts[0] === "questoes") questoes(params);
-    else if (parts[0] === "simulado") simulado();
+    else if (parts[0] === "simulado") simulado(params);
     else home();
   }
   window.addEventListener("hashchange", () => { route(); if (!location.hash.startsWith("#/questoes")) window.scrollTo(0, 0); });
